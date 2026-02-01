@@ -1,0 +1,130 @@
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService  = game:GetService("UserInputService")
+local HttpService       = game:GetService("HttpService")
+local TweenService      = game:GetService("TweenService")
+
+-- [[ SETTINGS ]]
+local TARGET_POS = Vector3.new(-352.5686, -7.3, 75.3669)
+local TOLERANCE = 6 
+local UUID = "78a772b6-9e1c-4827-ab8b-04a07838f298"
+local COMMANDS = {"rocket", "balloon", "inverse", "tiny", "jumpscare", "morph"}
+local SAVE_FILE = "6ixHub_v14.json"
+
+-- [[ STATE ]]
+local selectedTarget, currentKeybind, isBinding, isMinimized = nil, nil, false, false
+
+-- [[ CACHED REMOTE ]]
+local Remote = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RE/352aad58-c786-4998-886b-3e4fa390721e")
+
+-- [[ ZERO-DELAY ENGINE ]]
+local function instantSpam()
+    local target = selectedTarget
+    if not Remote or not target or not target.Parent then return end
+    
+    -- Hard-coded unrolled loop for maximum speed
+    Remote:FireServer(UUID, target, "rocket")
+    Remote:FireServer(UUID, target, "balloon")
+    Remote:FireServer(UUID, target, "inverse")
+    Remote:FireServer(UUID, target, "tiny")
+    Remote:FireServer(UUID, target, "jumpscare")
+    Remote:FireServer(UUID, target, "morph")
+end
+
+-- [[ SAVE/LOAD ]]
+local function save() pcall(writefile, SAVE_FILE, HttpService:JSONEncode({Bind = currentKeybind and currentKeybind.Name or nil})) end
+local function load()
+    if isfile(SAVE_FILE) then
+        local s, d = pcall(HttpService.JSONDecode, HttpService, readfile(SAVE_FILE))
+        if s and d.Bind then currentKeybind = Enum.KeyCode[d.Bind]; return d.Bind end
+    end
+    return "NONE"
+end
+
+-- [[ GUI ]]
+local ScreenGui = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.Name = "6ixHub_V14"; ScreenGui.ResetOnSpawn = false
+
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 175, 0, 230); Main.Position = UDim2.new(0.5, -87, 0.5, -115)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 12); Main.BorderSizePixel = 0; Main.Active = true; Main.ClipsDescendants = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+
+local Stroke = Instance.new("UIStroke", Main)
+Stroke.Thickness = 2; Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+local Grad = Instance.new("UIGradient", Stroke)
+Grad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 50, 255)), ColorSequenceKeypoint.new(0.5, Color3.fromRGB(15, 15, 20)), ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 50, 255))}
+task.spawn(function() while RunService.RenderStepped:Wait() do Grad.Rotation = (Grad.Rotation + 5) % 360 end end)
+
+local Min = Instance.new("TextButton", Main)
+Min.Size = UDim2.new(0, 20, 0, 20); Min.Position = UDim2.new(1, -25, 0, 5); Min.BackgroundTransparency = 1; Min.Text = "-"; Min.Font = Enum.Font.FredokaOne; Min.TextColor3 = Color3.new(1,1,1); Min.TextSize = 18
+
+local Head = Instance.new("TextLabel", Main)
+Head.Size = UDim2.new(1, -30, 0, 30); Head.Position = UDim2.new(0, 10, 0, 0); Head.BackgroundTransparency = 1; Head.Text = "6ix HUB"; Head.Font = Enum.Font.FredokaOne; Head.TextColor3 = Color3.new(1,1,1); Head.TextSize = 13; Head.TextXAlignment = Enum.TextXAlignment.Left
+
+local TargetBox = Instance.new("Frame", Main)
+TargetBox.Size = UDim2.new(1, -16, 0, 35); TargetBox.Position = UDim2.new(0, 8, 0, 30); TargetBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Instance.new("UICorner", TargetBox)
+local Av = Instance.new("ImageLabel", TargetBox); Av.Size = UDim2.new(0, 25, 0, 25); Av.Position = UDim2.new(0, 5, 0.5, -12.5); Av.BackgroundTransparency = 1; Instance.new("UICorner", Av).CornerRadius = UDim.new(1,0)
+local NLbl = Instance.new("TextLabel", TargetBox); NLbl.Size = UDim2.new(1, -40, 1, 0); NLbl.Position = UDim2.new(0, 35, 0, 0); NLbl.BackgroundTransparency = 1; NLbl.Text = "CHOOSE..."; NLbl.Font = Enum.Font.FredokaOne; NLbl.TextColor3 = Color3.fromRGB(180, 50, 255); NLbl.TextSize = 9; NLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local Spam = Instance.new("TextButton", Main)
+Spam.Size = UDim2.new(1, -16, 0, 25); Spam.Position = UDim2.new(0, 8, 0, 70); Spam.BackgroundColor3 = Color3.fromRGB(180, 50, 255); Spam.Text = "SPAM (O on Controller)"; Spam.Font = Enum.Font.FredokaOne; Spam.TextColor3 = Color3.new(1,1,1); Spam.TextSize = 9; Instance.new("UICorner", Spam)
+
+local Bind = Instance.new("TextButton", Main)
+Bind.Size = UDim2.new(1, -16, 0, 22); Bind.Position = UDim2.new(0, 8, 0, 100); Bind.BackgroundColor3 = Color3.fromRGB(25, 25, 30); Bind.Text = "KEY: " .. load(); Bind.Font = Enum.Font.FredokaOne; Bind.TextColor3 = Color3.fromRGB(150, 150, 150); Bind.TextSize = 8; Instance.new("UICorner", Bind)
+
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Size = UDim2.new(1, -10, 1, -135); Scroll.Position = UDim2.new(0, 5, 0, 130); Scroll.BackgroundTransparency = 1; Scroll.ScrollBarThickness = 0
+local Lay = Instance.new("UIListLayout", Scroll); Lay.Padding = UDim.new(0, 3)
+
+-- [[ DRAG & INPUT ]]
+local function setupDrag(f)
+    local drag, start, sPos, active
+    f.InputBegan:Connect(function(i)
+        if (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) and i.Position.Y - f.AbsolutePosition.Y < 30 then
+            if not active then active = i; drag = true; start = i.Position; sPos = f.Position
+                i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false; active = nil end end)
+            end
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i) if i == active and drag then local delta = i.Position - start; f.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + delta.X, sPos.Y.Scale, sPos.Y.Offset + delta.Y) end end)
+end
+setupDrag(Main)
+
+Spam.MouseButton1Click:Connect(instantSpam)
+Bind.MouseButton1Click:Connect(function() isBinding = true; Bind.Text = "..." end)
+
+UserInputService.InputBegan:Connect(function(i, g)
+    if isBinding and i.UserInputType == Enum.UserInputType.Keyboard then
+        currentKeybind = i.KeyCode; Bind.Text = "KEY: " .. i.KeyCode.Name:upper(); isBinding = false; save()
+    elseif not g and selectedTarget then
+        if i.KeyCode == currentKeybind or i.KeyCode == Enum.KeyCode.ButtonB then instantSpam() end
+    end
+end)
+
+Min.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    TweenService:Create(Main, TweenInfo.new(0.15), {Size = isMinimized and UDim2.new(0, 175, 0, 30) or UDim2.new(0, 175, 0, 230)}):Play()
+    Min.Text = isMinimized and "+" or "-"
+end)
+
+local function refresh()
+    for _, v in ipairs(Scroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Players.LocalPlayer then
+            local b = Instance.new("TextButton", Scroll)
+            b.Size = UDim2.new(1, -6, 0, 24); b.BackgroundColor3 = Color3.fromRGB(18, 18, 22); b.Text = "  " .. p.Name; b.Font = Enum.Font.FredokaOne; b.TextColor3 = Color3.new(0.8, 0.8, 0.8); b.TextSize = 9; b.TextXAlignment = Enum.TextXAlignment.Left; Instance.new("UICorner", b)
+            b.MouseButton1Click:Connect(function() selectedTarget = p; NLbl.Text = p.Name:upper(); Av.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size42x42) end)
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(refresh); Players.PlayerRemoving:Connect(refresh); refresh()
+RunService.Heartbeat:Connect(function()
+    local char = Players.LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root and (root.Position - TARGET_POS).Magnitude <= TOLERANCE then
+        if selectedTarget and selectedTarget.Parent then instantSpam() end
+    end
+end)
